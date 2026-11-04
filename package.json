@@ -1,0 +1,43 @@
+{
+  "name": "dsh-btw",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ask follow-up questions in the DeepSeek Harness sidebar.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.19.0", "dsh": "0.2.1-rc.2" },
+  "exports": {
+    ".": "./host.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["host.js", "core.js", "persistence.js", "client.js", "scripts/plan-legacy-archive.mjs", "cordis.patch.yml", "locale/*.json", "icon.svg", "docs/images/*.jpg", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"],
+  "scripts": {
+    "build": "esbuild client.source.js --bundle --format=iife --target=es2022 --outfile=client.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check host.js && node --check core.js && node --check persistence.js && node --check client.source.js && node --check client-model-directory.js && node --check client-markdown.js && node --check client.js && node --check scripts/plan-legacy-archive.mjs"
+  },
+  "dependencies": { "zod": "4.4.3" },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-session": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12", "marked": "15.0.12", "react": "19.2.0", "react-dom": "19.2.0", "react-test-renderer": "19.2.0",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-storage": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-storage-json": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-storage-domain": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-connection": "0.2.1-rc.2"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-model-selection", "@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-ui-sidebar-right"]
+    }
+  }
+}
