@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { MAX_QUICK_PROMPTS, MAX_QUICK_PROMPT_CHARS } from './preferences.js';
 
 export const BTW_PROTOCOL_VERSION = 1;
 export const MAX_CONTEXT_CHARS = 1_000_000;
@@ -34,12 +35,21 @@ export function validateSettings(value) {
   string(value.provider, 'provider'); string(value.model, 'model');
   return { mode: 'fixed', provider: value.provider, model: value.model };
 }
+export function validateUiSettings(value) {
+  object(value, 'ui');
+  onlyKeys(value, ['showButton', 'quickPrompts']);
+  assert(typeof value.showButton === 'boolean', 'INVALID_REQUEST', 'ui.showButton must be a boolean');
+  assert(Array.isArray(value.quickPrompts) && value.quickPrompts.length <= MAX_QUICK_PROMPTS,
+    'INVALID_REQUEST', `ui.quickPrompts must be an array (max ${MAX_QUICK_PROMPTS})`);
+  for (const prompt of value.quickPrompts) string(prompt, 'quick prompt', MAX_QUICK_PROMPT_CHARS);
+  return { showButton: value.showButton, quickPrompts: value.quickPrompts.map(prompt => prompt.trim()) };
+}
 export function validateRequest(input) {
   object(input, 'request');
   const fields = {
     open: ['messageId'], get: ['threadId'], send: ['threadId', 'text', 'requestId'],
     stop: ['threadId'], watch: ['threadId', 'afterRevision', 'timeoutMs'],
-    config: ['settings', 'threadId'], models: ['provider'],
+    config: ['settings', 'ui', 'threadId'], models: ['provider'],
   };
   assert(Object.hasOwn(fields, input.action), 'INVALID_REQUEST', 'Unknown BTW action');
   onlyKeys(input, ['action', 'sourceSessionId', ...fields[input.action]]);
@@ -61,6 +71,10 @@ export function validateRequest(input) {
     assert(Number.isSafeInteger(request.timeoutMs) && request.timeoutMs >= 800 && request.timeoutMs <= 20_000, 'INVALID_REQUEST', 'timeoutMs must be 800..20000');
   }
   if (request.action === 'config' && request.settings !== undefined) request.settings = validateSettings(request.settings);
+  if (request.action === 'config' && request.ui !== undefined) {
+    assert(!Object.hasOwn(request, 'threadId'), 'INVALID_REQUEST', 'UI settings are global');
+    request.ui = validateUiSettings(request.ui);
+  }
   if (request.action === 'models') string(request.provider, 'provider');
   return request;
 }

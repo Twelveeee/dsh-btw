@@ -69,6 +69,8 @@ test('real JSONL sessions and JSON domain reopen preserve BTW history, model, an
   try {
     const first = await mount();
     await first.service.dispatch({ action: 'config', settings: { mode: 'fixed', provider: 'chosen-provider', model: 'chosen-model' } });
+    const ui = { showButton:false, quickPrompts:['说人话', '给个例子'] };
+    await first.service.dispatch({ action:'config', ui });
     const sourceSessionId = 'source-session';
     const original = (await first.service.dispatch({ action: 'open', sourceSessionId, messageId: first.sourceMessage.id })).thread;
     await first.service.dispatch({ action: 'send', sourceSessionId, threadId: original.id, text: 'Side question', requestId: 'one' });
@@ -87,7 +89,8 @@ test('real JSONL sessions and JSON domain reopen preserve BTW history, model, an
 
     // Entirely new backend instances: no first-service in-memory cache survives this boundary.
     const second = await mount();
-    assert.deepEqual(second.domain.global.get(), { mode: 'fixed', provider: 'chosen-provider', model: 'chosen-model' });
+    assert.deepEqual(second.domain.global.get(), { mode: 'fixed', provider: 'chosen-provider', model: 'chosen-model', ui });
+    assert.deepEqual((await second.service.dispatch({ action:'config' })).ui, ui);
     const restored = (await second.service.dispatch({ action: 'get', sourceSessionId, threadId: original.id })).thread;
     assert.deepEqual(restored.messages, settled.messages);
     assert.deepEqual(restored.model, { provider:'switched-provider', model:'switched-model' });

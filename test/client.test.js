@@ -12,6 +12,7 @@ function fixture(options = {}) {
   const dictionaries = {};
   const locale = { active:'zh', revision:0 };
   let defaults = { mode:'follow' };
+  let ui = options.ui || { showButton:true, quickPrompts:['这段能不能说得更直白一点？', '说人话'] };
   let thread = { id:'btw-1', sourceSessionId:'s1', sourceMessageId:'a1', revision:1, status:options.status || 'idle', model:{ provider:'p', model:'m' }, messages:options.messages || [] };
   const store = new Map();
   const context = {
@@ -58,7 +59,7 @@ function fixture(options = {}) {
       assert.equal(channel, '/btw-rpc'); assert.equal(endpoint, 'dsh-btw/dispatch'); calls.push(request);
       if (request.action === 'watch') return new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(new Error('aborted')), { once:true }));
       if (request.action === 'config') {
-        if (request.settings && options.failSave) return { ok:false, error:{ message:'Model could not be saved' } };
+        if ((request.settings || request.ui) && options.failSave) return { ok:false, error:{ message:'Model could not be saved' } };
         if (request.threadId) {
           assert.equal(request.threadId, thread.id); assert.equal(request.sourceSessionId, 's1');
           if (request.settings) thread = { ...thread, revision:thread.revision + 1,
@@ -66,7 +67,8 @@ function fixture(options = {}) {
           return { ok:true, value:{ settings:thread.modelSettings || { mode:'fixed', ...thread.model }, providers:[{ id:'p' }, { id:'p-next' }], thread } };
         }
         if (request.settings) defaults = request.settings;
-        return { ok:true, value:{ settings:defaults, providers:[{ id:'p' }, { id:'p-next' }] } };
+        if (request.ui) ui = request.ui;
+        return { ok:true, value:{ settings:defaults, ...(!options.legacyHost ? { ui } : {}), providers:[{ id:'p' }, { id:'p-next' }] } };
       }
       if (request.action === 'models') return { ok:true, value:{ models:[{ id:'m' }, { id:'m-new' }] } };
       if (request.action === 'send') thread = { ...thread, revision:thread.revision + 1, status:'running', messages:[{ id:'q1', role:'user', text:request.text }], draftAssistant:'**Hello**\n\n<script>alert(1)</script>\n\n[unsafe](javascript:alert(1))\n\n![tracker](https://evil.test/a.png)' };
@@ -87,14 +89,14 @@ test('BTW action opens native resource without invoking the model or creating a 
   assert.equal(button.props['aria-label'], '顺便问一句');
   await act(async () => button.props.onClick());
   assert.deepEqual(f.opened, ['dsh-resource://btw/s1/a1']);
-  assert.equal(f.calls.length, 0);
+  assert.equal(f.calls.length, 1); assert.equal(f.calls[0].action, 'config');
   await act(async () => view.unmount()); f.dispose();
 });
 
 test('panel loads snapshot, accepts IME-safe followups, stops, and never renders executable model HTML', async () => {
   const f = fixture(); let view;
   await act(async () => { view = create(React.createElement(f.registrations.get('sidebar.right.pane.tab'), { useTabInfo:() => ({ tab:{ visible:true, navigation:{ address:'dsh-resource://btw/s1/a1' } } }) })); });
-  assert.deepEqual(f.calls.slice(0, 2).map(x => x.action), ['open', 'watch']);
+  assert.deepEqual(f.calls.filter(x => x.action !== 'config').slice(0, 2).map(x => x.action), ['open', 'watch']);
   const textarea = () => view.root.findByType('textarea');
   await act(async () => textarea().props.onChange({ target:{ value:'为什么？' } }));
   await act(async () => textarea().props.onKeyDown({ key:'Enter', shiftKey:false, nativeEvent:{ isComposing:true }, preventDefault:() => assert.fail('Must not submit during IME composition') }));
@@ -121,12 +123,85 @@ test('global plugin settings load without forging a source session', async () =>
   await act(async () => { view = create(React.createElement(f.registrations.get('plugins.bundle.config'))); });
   assert.equal(f.calls.length, 1); assert.equal(f.calls[0].action, 'config'); assert.equal(f.calls[0].sourceSessionId, undefined);
   assert.equal(view.root.findByType('select').props.value, 'follow');
+  assert.equal(view.root.findByProps({ role:'switch' }).props.checked, true);
+  assert.deepEqual(view.root.findAllByProps({ type:'text' }).map(input => input.props.value), ['这段能不能说得更直白一点？', '说人话']);
+  await act(async () => view.unmount()); f.dispose();
+});
+
+test('a new settings page tells an old Host to restart before sending unsupported fields', async () => {
+  const f = fixture({ legacyHost:true }); let view;
+  await act(async () => { view = create(React.createElement(f.registrations.get('plugins.bundle.config'))); });
+  assert(view.root.findByProps({ role:'alert' }).children.includes('请重启 DSH Host 后刷新页面，以加载新版插件设置。'));
+  await act(async () => view.root.findByProps({ role:'switch' }).props.onChange({ target:{ checked:false } }));
+  await act(async () => buttonWithText(view, '保存设置').props.onClick());
+  assert.equal(f.calls.some(call => call.settings || call.ui), false);
+  assert(view.root.findByProps({ role:'alert' }).children.includes('请重启 DSH Host 后刷新页面，以加载新版插件设置。'));
   await act(async () => view.unmount()); f.dispose();
 });
 
 
 const panelProps = { useTabInfo:() => ({ tab:{ visible:true, navigation:{ address:'dsh-resource://btw/s1/a1' } } }) };
 const buttonWithText = (view, text) => view.root.findAllByType('button').find(button => button.children.includes(text) || button.props['aria-label'] === text);
+
+test('saved plugin preferences update the action and quick questions in mounted views', async () => {
+  const f = fixture(); let action, panel, settings;
+  await act(async () => {
+    action = create(React.createElement(f.registrations.get('conversation.chat.assistant-actions'), { sessionId:'s1', messageId:'a1' }));
+    panel = create(React.createElement(f.registrations.get('sidebar.right.pane.tab'), panelProps));
+    settings = create(React.createElement(f.registrations.get('plugins.bundle.config')));
+  });
+  assert.equal(action.root.findAllByType('button').length, 1);
+  await act(async () => buttonWithText(panel, '说人话').props.onClick());
+  assert.equal(panel.root.findByType('textarea').props.value, '说人话');
+  assert.equal(f.calls.some(call => call.action === 'send'), false);
+  await act(async () => {
+    settings.root.findByProps({ role:'switch' }).props.onChange({ target:{ checked:false } });
+    settings.root.findAllByProps({ type:'text' })[0].props.onChange({ target:{ value:'给个例子' } });
+  });
+  await act(async () => buttonWithText(settings, '添加提问').props.onClick());
+  await act(async () => settings.root.findAllByProps({ type:'text' })[2].props.onChange({ target:{ value:' 列出关键点 ' } }));
+  // Remove the old second entry through its adjacent remove button.
+  await act(async () => settings.root.findAllByProps({ className:'btw-prompt-row' })[1].findByType('button').props.onClick());
+  await act(async () => buttonWithText(settings, '保存设置').props.onClick());
+  const saved = f.calls.find(call => call.ui);
+  assert.equal(saved.sourceSessionId, undefined);
+  assert.equal(saved.ui.showButton, false);
+  assert.deepEqual(Array.from(saved.ui.quickPrompts), ['给个例子', '列出关键点']);
+  assert.equal(action.toJSON(), null);
+  assert.deepEqual(panel.root.findByProps({ className:'btw-suggestions' }).findAllByType('button').map(button => button.children[0]), ['给个例子', '列出关键点']);
+  assert.equal(panel.root.findByType('textarea').props.value, '说人话', 'saving preferences preserves the current draft');
+  await act(async () => settings.root.findByProps({ role:'switch' }).props.onChange({ target:{ checked:true } }));
+  await act(async () => buttonWithText(settings, '保存设置').props.onClick());
+  assert.equal(action.root.findAllByType('button').length, 1);
+  await act(async () => { action.unmount(); panel.unmount(); settings.unmount(); }); f.dispose();
+});
+
+test('persisted disabled action and empty quick questions survive mounting', async () => {
+  const f = fixture({ ui:{ showButton:false, quickPrompts:[] } }); let action, panel;
+  await act(async () => {
+    action = create(React.createElement(f.registrations.get('conversation.chat.assistant-actions'), { sessionId:'s1', messageId:'a1' }));
+    panel = create(React.createElement(f.registrations.get('sidebar.right.pane.tab'), panelProps));
+  });
+  assert.equal(action.toJSON(), null);
+  assert.equal(panel.root.findByProps({ className:'btw-suggestions' }).findAllByType('button').length, 0);
+  assert.equal(f.calls.filter(call => call.action === 'config' && !call.threadId).length, 1, 'mounted actions share one preference fetch');
+  await act(async () => { action.unmount(); panel.unmount(); }); f.dispose();
+});
+
+test('failed plugin preference saves leave the mounted action and questions unchanged', async () => {
+  const f = fixture({ failSave:true }); let action, panel, settings;
+  await act(async () => {
+    action = create(React.createElement(f.registrations.get('conversation.chat.assistant-actions'), { sessionId:'s1', messageId:'a1' }));
+    panel = create(React.createElement(f.registrations.get('sidebar.right.pane.tab'), panelProps));
+    settings = create(React.createElement(f.registrations.get('plugins.bundle.config')));
+  });
+  await act(async () => settings.root.findByProps({ role:'switch' }).props.onChange({ target:{ checked:false } }));
+  await act(async () => buttonWithText(settings, '保存设置').props.onClick());
+  assert.equal(action.root.findAllByType('button').length, 1);
+  assert(buttonWithText(panel, '说人话'));
+  assert(settings.root.findByProps({ role:'alert' }).children.includes('Model could not be saved'));
+  await act(async () => { action.unmount(); panel.unmount(); settings.unmount(); }); f.dispose();
+});
 
 test('native model selection saves the current thread immediately and preserves draft/history/defaults', async () => {
   const messages = [{ id:'old-q', role:'user', text:'已有问题' }, { id:'old-a', role:'assistant', text:'已有回答' }];

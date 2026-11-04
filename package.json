@@ -12,11 +12,11 @@
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
-  "files": ["host.js", "core.js", "persistence.js", "client.js", "scripts/plan-legacy-archive.mjs", "cordis.patch.yml", "locale/*.json", "icon.svg", "docs/images/*.jpg", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"],
+  "files": ["host.js", "core.js", "preferences.js", "persistence.js", "client.js", "scripts/plan-legacy-archive.mjs", "cordis.patch.yml", "locale/*.json", "icon.svg", "docs/images/*.jpg", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"],
   "scripts": {
     "build": "esbuild client.source.js --bundle --format=iife --target=es2022 --outfile=client.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check host.js && node --check core.js && node --check persistence.js && node --check client.source.js && node --check client-model-directory.js && node --check client-markdown.js && node --check client.js && node --check scripts/plan-legacy-archive.mjs"
+    "check": "node --check host.js && node --check core.js && node --check preferences.js && node --check persistence.js && node --check client.source.js && node --check client-model-directory.js && node --check client-markdown.js && node --check client.js && node --check scripts/plan-legacy-archive.mjs"
   },
   "dependencies": { "zod": "4.4.3" },
   "peerDependencies": {

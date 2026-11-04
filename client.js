@@ -2259,6 +2259,14 @@ ${text}</tr>
     }
   };
 
+  // preferences.js
+  var MAX_QUICK_PROMPTS = 20;
+  var MAX_QUICK_PROMPT_CHARS = 2e4;
+  var DEFAULT_UI_SETTINGS = Object.freeze({
+    showButton: true,
+    quickPrompts: Object.freeze(["\u8FD9\u6BB5\u80FD\u4E0D\u80FD\u8BF4\u5F97\u66F4\u76F4\u767D\u4E00\u70B9\uFF1F", "\u8BF4\u4EBA\u8BDD"])
+  });
+
   // client.source.js
   window.__ModuleLoader__.load({
     id: "dsh-btw",
@@ -2341,8 +2349,13 @@ ${text}</tr>
           missingModel: "\u8BF7\u9009\u62E9\u63D0\u4F9B\u5546\u548C\u6A21\u578B\u3002",
           source: "\u5F15\u7528\u7684\u56DE\u7B54",
           noSource: "\u8BF7\u4ECE\u4E00\u6761\u5DF2\u5B8C\u6210\u56DE\u7B54\u65C1\u7684 BTW \u6309\u94AE\u6253\u5F00\u3002",
-          prompt1: "\u8FD9\u6BB5\u80FD\u4E0D\u80FD\u8BF4\u5F97\u66F4\u76F4\u767D\u4E00\u70B9\uFF1F",
-          prompt2: "\u4E3A\u4EC0\u4E48\u9009\u62E9\u8FD9\u4E2A\u65B9\u6848\uFF1F",
+          pluginSettings: "\u63D2\u4EF6\u8BBE\u7F6E",
+          showButton: "\u663E\u793A\u5BF9\u8BDD BTW \u6309\u94AE",
+          quickPrompts: "\u5FEB\u6377\u63D0\u95EE",
+          quickPrompt: "\u63D0\u95EE {number}",
+          addPrompt: "\u6DFB\u52A0\u63D0\u95EE",
+          removePrompt: "\u5220\u9664\u63D0\u95EE {number}",
+          hostUpdateRequired: "\u8BF7\u91CD\u542F DSH Host \u540E\u5237\u65B0\u9875\u9762\uFF0C\u4EE5\u52A0\u8F7D\u65B0\u7248\u63D2\u4EF6\u8BBE\u7F6E\u3002",
           connectionError: "\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u8BF7\u91CD\u8BD5\u3002",
           unavailable: "\u5F53\u524D\u9875\u9762\u65E0\u6CD5\u6253\u5F00\u53F3\u4FA7\u8BA8\u8BBA\u3002",
           tooLong: "\u95EE\u9898\u4E0D\u80FD\u8D85\u8FC7 20,000 \u4E2A\u5B57\u7B26\u3002",
@@ -2420,8 +2433,13 @@ ${text}</tr>
           missingModel: "Choose a provider and model.",
           source: "Source answer",
           noSource: "Open BTW next to a completed answer.",
-          prompt1: "Could you explain this more plainly?",
-          prompt2: "Why did you choose this approach?",
+          pluginSettings: "Plugin settings",
+          showButton: "Show the conversation BTW button",
+          quickPrompts: "Quick questions",
+          quickPrompt: "Question {number}",
+          addPrompt: "Add question",
+          removePrompt: "Remove question {number}",
+          hostUpdateRequired: "Restart DSH Host, then refresh the page to load the updated plugin settings.",
           connectionError: "Connection interrupted. Please reconnect.",
           unavailable: "The sidebar is unavailable on this page.",
           tooLong: "Keep the question within 20,000 characters.",
@@ -2471,6 +2489,7 @@ ${text}</tr>
       .btw-root button.btw-primary{background:var(--dsw-alias-button-info-fill);color:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:500}.btw-root button.btw-primary:hover{background:var(--dsw-alias-button-info-hover)}
       @container (width<440px){.btw-context-toggle>span{display:none}.btw-composer-trailing{gap:8px}.btw-native-model{max-width:calc(100cqw - 120px)}.btw-scroll{padding-top:16px}.btw-dock{gap:4px}}
       .btw-settings{padding:18px;overflow:auto;max-width:620px}.btw-settings h3{font-size:16px;font-weight:500;margin:0 0 12px}.btw-field{display:block;margin:16px 0;font-size:13px}.btw-field>span{display:block;margin-bottom:7px}.btw-field select,.btw-field input{display:block;width:100%;min-height:36px;background:var(--dsw-specific-input-major);border:1px solid var(--btw-border);border-radius:var(--dsw-radius-sm,6px);padding:7px 9px}.btw-settings p{font-size:12px;color:var(--btw-muted);line-height:20px}.btw-setting-actions{display:flex;align-items:center;gap:10px}.btw-saved{font-size:12px;color:var(--dsw-alias-state-success-primary)}
+      .btw-toggle{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:16px 0;font-size:13px;cursor:pointer}.btw-toggle input{appearance:none;position:relative;display:block;width:34px;height:20px;flex:none;margin:0;border:1px solid var(--btw-border);border-radius:999px;background:var(--dsw-alias-label-caption);cursor:pointer}.btw-toggle input:checked{background:var(--btw-accent);border-color:var(--btw-accent)}.btw-toggle input::after{content:'';display:block;position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff}.btw-toggle input:checked::after{transform:translateX(14px)}.btw-toggle input:disabled{opacity:.4;cursor:default}.btw-prompt-fields{border:0;padding:0;margin:20px 0}.btw-prompt-fields legend{font-size:13px;margin-bottom:8px}.btw-prompt-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}.btw-prompt-row .btw-field{margin:0;flex:1;min-width:0}.btw-prompt-row>button{flex:none}
       @media(prefers-reduced-motion:no-preference){.btw-pulse{animation:btw-pulse 1.5s ease-in-out infinite}@keyframes btw-pulse{50%{opacity:.45}}}
     `;
       function Icon({ size = 16 }) {
@@ -2492,11 +2511,45 @@ ${text}</tr>
             return translate;
           }
           const focusTargets = /* @__PURE__ */ new Map();
+          let uiSettings = DEFAULT_UI_SETTINGS;
+          let uiLoaded = false;
+          let uiRevision = 0;
+          let uiLoad;
+          const uiListeners = /* @__PURE__ */ new Set();
+          const subscribeUi = (listener) => {
+            uiListeners.add(listener);
+            return () => uiListeners.delete(listener);
+          };
+          function publishUi(value) {
+            uiSettings = value || DEFAULT_UI_SETTINGS;
+            uiLoaded = true;
+            uiRevision++;
+            uiListeners.forEach((listener) => listener());
+          }
+          function loadUi() {
+            return uiLoad ||= rpc("config").catch(() => {
+              uiLoad = null;
+              if (!uiLoaded && !lifetime.signal.aborted) publishUi(DEFAULT_UI_SETTINGS);
+            });
+          }
+          function useUiSettings() {
+            useSyncExternalStore(subscribeUi, () => uiRevision, () => uiRevision);
+            useEffect(() => {
+              void loadUi();
+            }, []);
+            return uiSettings;
+          }
           const lifetime = new AbortController();
           ctx.effect(() => () => lifetime.abort());
+          ctx.on?.("connection/reset", () => {
+            uiLoad = null;
+            void loadUi();
+          });
           async function rpc(action, data = {}, signal) {
+            const revision = uiRevision;
             const result = await ctx.connection.rpc.call("/btw-rpc", "dsh-btw/dispatch", { action, ...data }, signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal);
             if (!result.ok) throw Object.assign(new Error(result.error?.message || "BTW request failed"), { code: result.error?.code });
+            if (action === "config" && !data.threadId && !lifetime.signal.aborted && !signal?.aborted && (data.ui || revision === uiRevision)) publishUi(result.value.ui);
             return result.value;
           }
           const address = (sessionId, messageId) => `dsh-resource://btw/${encodeURIComponent(sessionId)}/${encodeURIComponent(messageId)}`;
@@ -2726,6 +2779,8 @@ ${text}</tr>
             const running = thread?.status === "running";
             const target = threadId ? { sourceSessionId, threadId } : {};
             const [form, setForm] = useState(null);
+            const [uiForm, setUiForm] = useState(DEFAULT_UI_SETTINGS);
+            const [supportsUiSettings, setSupportsUiSettings] = useState(false);
             const [providers, setProviders] = useState([]);
             const [models, setModels] = useState([]);
             const [error, setError] = useState("");
@@ -2734,8 +2789,13 @@ ${text}</tr>
             useEffect(() => {
               const ac = new AbortController();
               rpc("config", target, ac.signal).then((value) => {
+                if (ac.signal.aborted) return;
                 setForm(value.settings);
+                setUiForm(value.ui || DEFAULT_UI_SETTINGS);
                 setProviders(value.providers || []);
+                const supported = !!value.ui;
+                setSupportsUiSettings(supported);
+                if (!threadId && !supported) setError(t("hostUpdateRequired"));
               }).catch((e) => {
                 if (!ac.signal.aborted) setError(e.message);
               });
@@ -2758,8 +2818,17 @@ ${text}</tr>
               setSaved(false);
               setError("");
             }
+            function updateUi(next) {
+              setUiForm((previous) => ({ ...previous, ...next }));
+              setSaved(false);
+              setError("");
+            }
             async function save() {
               if (!form || busy || running) return;
+              if (!threadId && !supportsUiSettings) {
+                setError(t("hostUpdateRequired"));
+                return;
+              }
               if (form.mode === "fixed" && (!form.provider || !form.model)) {
                 setError(t("missingModel"));
                 return;
@@ -2769,8 +2838,10 @@ ${text}</tr>
               setError("");
               try {
                 const settings = form.mode === "follow" ? { mode: "follow" } : { mode: "fixed", provider: form.provider, model: form.model };
-                const result = await rpc("config", { ...target, settings });
+                const ui = { ...uiForm, quickPrompts: uiForm.quickPrompts.map((prompt) => prompt.trim()).filter(Boolean) };
+                const result = await rpc("config", { ...target, settings, ...!threadId ? { ui } : {} });
                 setForm(result.settings);
+                if (!threadId) setUiForm(result.ui);
                 if (result.thread) onSaved?.(result.thread);
                 setSaved(true);
               } catch (e) {
@@ -2781,15 +2852,33 @@ ${text}</tr>
             }
             return h(
               "section",
-              { className: "btw-root btw-settings", "aria-label": t("settings") },
+              { className: "btw-root btw-settings", "aria-label": t(threadId ? "settings" : "pluginSettings") },
               h("style", null, css),
-              h("h3", null, t("settings")),
-              !threadId && h("p", null, t("modelHint")),
+              h("h3", null, t(threadId ? "settings" : "pluginSettings")),
               running && h("p", { role: "status" }, t("modelBusy")),
               error && h("div", { className: "btw-error", role: "alert" }, error),
               !form ? !error && h("p", null, t("loading")) : h(
                 React.Fragment,
                 null,
+                !threadId && h(
+                  React.Fragment,
+                  null,
+                  h("label", { className: "btw-toggle" }, h("span", null, t("showButton")), h("input", { type: "checkbox", role: "switch", checked: uiForm.showButton, disabled: busy, onChange: (e) => updateUi({ showButton: e.target.checked }) })),
+                  h(
+                    "fieldset",
+                    { className: "btw-prompt-fields", disabled: busy },
+                    h("legend", null, t("quickPrompts")),
+                    uiForm.quickPrompts.map((prompt, index) => h(
+                      "div",
+                      { className: "btw-prompt-row", key: index },
+                      h("label", { className: "btw-field" }, h("span", { className: "btw-sr-only" }, t("quickPrompt", { number: index + 1 })), h("input", { type: "text", value: prompt, maxLength: MAX_QUICK_PROMPT_CHARS, onChange: (e) => updateUi({ quickPrompts: uiForm.quickPrompts.map((value, i) => i === index ? e.target.value : value) }) })),
+                      h("button", { "data-btw-control": true, type: "button", "aria-label": t("removePrompt", { number: index + 1 }), onClick: () => updateUi({ quickPrompts: uiForm.quickPrompts.filter((_, i) => i !== index) }) }, "\xD7")
+                    )),
+                    h("button", { "data-btw-control": true, type: "button", disabled: uiForm.quickPrompts.length >= MAX_QUICK_PROMPTS, onClick: () => updateUi({ quickPrompts: [...uiForm.quickPrompts, ""] }) }, t("addPrompt"))
+                  ),
+                  h("h3", null, t("settings")),
+                  h("p", null, t("modelHint"))
+                ),
                 h("label", { className: "btw-field" }, h("span", null, t(threadId ? "threadModel" : "modelMode")), h("select", { disabled: busy || running, value: form.mode, onChange: (e) => update({ mode: e.target.value }) }, h("option", { value: "follow" }, t("follow")), h("option", { value: "fixed" }, t("fixed")))),
                 form.mode === "fixed" && h(
                   React.Fragment,
@@ -2804,6 +2893,7 @@ ${text}</tr>
           }
           function Action({ sessionId, messageId }) {
             const t = useT();
+            const ui = useUiSettings();
             const [error, setError] = useState("");
             function open() {
               try {
@@ -2816,6 +2906,7 @@ ${text}</tr>
                 setError(e.message);
               }
             }
+            if (!uiLoaded || !ui.showButton) return null;
             return h(
               "span",
               { className: "btw-root btw-action" },
@@ -2826,6 +2917,7 @@ ${text}</tr>
           }
           function Panel(props) {
             const t = useT();
+            const ui = useUiSettings();
             const info = props.useTabInfo();
             const source = parseAddress(info.tab.navigation.address);
             const sourceSessionId = source?.sourceSessionId;
@@ -3031,10 +3123,10 @@ ${text}</tr>
                     { className: "btw-empty" },
                     h(Icon, { size: 28 }),
                     h("h3", null, t("empty")),
-                    h("div", { className: "btw-suggestions" }, ["prompt1", "prompt2"].map((key) => h("button", { "data-btw-control": true, type: "button", key, onClick: () => {
-                      changeDraft(t(key));
+                    h("div", { className: "btw-suggestions" }, ui.quickPrompts.map((prompt, index) => h("button", { "data-btw-control": true, type: "button", key: index, onClick: () => {
+                      changeDraft(prompt);
                       composer.current?.focus();
-                    } }, t(key))))
+                    } }, prompt)))
                   ),
                   thread?.messages.map((message) => h(
                     "article",

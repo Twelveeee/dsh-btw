@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { DEFAULT_UI_SETTINGS, MAX_QUICK_PROMPTS, MAX_QUICK_PROMPT_CHARS } from './preferences.js';
 import { PRIVATE_STORAGE, mountPrivatePersistence, migrateLegacyThread, isWithin, canonicalStorageRoot } from './persistence.js';
 import {
-  BtwError, assert, validateRequest, validateSettings, captureContext, contextText, chooseModel,
+  BtwError, assert, validateRequest, captureContext, contextText, chooseModel,
   threadKey, questionId, normaliseChoices, textOf, errorMessage, throwIfAborted,
   KeyedMutex, foldThread, SYSTEM_PROMPT,
 } from './core.js';
@@ -14,10 +15,11 @@ export function domainSpec(z) {
   const id = z.string().min(1).max(512);
   const model = z.object({ provider: id, model: id }).strict();
   const selection = z.union([z.object({ mode: z.literal('follow') }).strict(), z.object({ mode: z.literal('fixed'), provider: id, model: id }).strict()]);
+  const ui = z.object({ showButton: z.boolean(), quickPrompts: z.array(z.string().trim().min(1).max(MAX_QUICK_PROMPT_CHARS)).max(MAX_QUICK_PROMPTS) }).strict();
   return {
     name: 'dsh_btw', version: 1, layout: 'per-record',
     global: {
-      schema: selection,
+      schema: z.union(selection.options.map(option => option.extend({ ui: ui.optional() }))),
       initial: { mode: 'follow' },
     },
     tables: { threads: { valueSchema: z.object({
@@ -57,8 +59,13 @@ export class BtwService {
     throwIfAborted(signal);
     if (request.action === 'config') {
       if (request.threadId) return this.configureThread(request, signal);
-      if (request.settings) await this.domain.global.set(validateSettings(request.settings));
-      return { settings: this.domain.global.get(), providers: normaliseChoices(this.ctx.llm.listProviders()) };
+      return this.locks.run('global-config', async () => {
+        throwIfAborted(signal);
+        const { ui, ...settings } = this.domain.global.get();
+        const next = { ...(request.settings ?? settings), ...(request.ui || ui ? { ui: request.ui ?? ui } : {}) };
+        if (request.settings || request.ui) await this.domain.global.set(next);
+        return { settings: request.settings ?? settings, ui: next.ui ?? DEFAULT_UI_SETTINGS, providers: normaliseChoices(this.ctx.llm.listProviders()) };
+      });
     }
     if (request.action === 'models') return { models: normaliseChoices(await this.ctx.llm.listModels(request.provider)) };
     if (request.action === 'open') return this.locks.run(threadKey(request.sourceSessionId, request.messageId), async () => {
@@ -124,7 +131,7 @@ export class BtwService {
     const source = await this.ctx.sessionQuery.readSession(request.sourceSessionId);
     throwIfAborted(signal);
     const captured = captureContext(source.events, request.messageId);
-    const modelSettings = { ...this.domain.global.get() };
+    const { ui: _ui, ...modelSettings } = this.domain.global.get();
     const model = chooseModel(modelSettings, captured);
     const id = `btw-${randomUUID()}`;
     const session = this.runtime.Session.create(id, [], {
@@ -392,7 +399,7 @@ export function registerTool(ctx, service, defineTool) {
     output: { schema: { type: 'json' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
     execute: async (args, exec) => {
       assert(exec.agent?.session?.id, 'NO_SESSION', 'BTW requires a calling agent session.');
-      assert(!Object.hasOwn(args, 'settings'), 'FORBIDDEN', 'Change the default model in BTW settings.');
+      assert(!Object.hasOwn(args, 'settings') && !Object.hasOwn(args, 'ui'), 'FORBIDDEN', 'Change plugin options in BTW settings.');
       return service.dispatch({ ...args, sourceSessionId: exec.agent.session.id }, exec.signal);
     },
   }));

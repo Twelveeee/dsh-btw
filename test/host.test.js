@@ -93,6 +93,36 @@ test('owner-only RPC fails closed and validates requests before business calls',
   await f.service.dispose();
 });
 
+test('global UI preferences preserve model selection and stay out of thread metadata', async () => {
+  const f = fixture();
+  try {
+    const initial = await f.service.dispatch({ action:'config' });
+    assert.deepEqual(initial.settings, { mode:'follow' });
+    assert.deepEqual(initial.ui, { showButton:true, quickPrompts:['这段能不能说得更直白一点？', '说人话'] });
+    const ui = { showButton:false, quickPrompts:['说人话', '给个例子'] };
+    const settings = { mode:'fixed', provider:'custom', model:'custom-model' };
+    await Promise.all([
+      f.service.dispatch({ action:'config', ui }),
+      f.service.dispatch({ action:'config', settings }),
+    ]);
+    const saved = await f.service.dispatch({ action:'config' });
+    assert.deepEqual(saved.ui, ui); assert.deepEqual(saved.settings, settings);
+    const spec = domainSpec(z);
+    assert.deepEqual(spec.global.schema.parse(f.domain.global.get()), { ...settings, ui });
+    const thread = await open(f);
+    assert.deepEqual(thread.model, { provider:'custom', model:'custom-model' });
+    assert.deepEqual(f.index.get(thread.id).modelSettings, settings);
+    spec.tables.threads.valueSchema.parse(f.index.get(thread.id));
+    await f.service.dispatch(request('config', { threadId:thread.id, settings:{ mode:'follow' } }));
+    assert.deepEqual((await f.service.dispatch({ action:'config' })).ui, ui);
+    const reloaded = new BtwService(f.ctx, f.domain, runtime);
+    assert.deepEqual((await reloaded.dispatch({ action:'config' })).ui, ui);
+    await reloaded.dispose();
+    await f.service.dispatch({ action:'config', ui:{ showButton:true, quickPrompts:[] } });
+    assert.deepEqual((await f.service.dispatch({ action:'config' })).settings, settings);
+  } finally { await f.service.dispose(); }
+});
+
 test('thread config exposes route capacity as optional read-only metadata', async () => {
   const f = fixture();
   try {
@@ -220,6 +250,7 @@ test('domain schema and actual tool definition accept the implementation contrac
   const value = await tool.execute(request('get', { threadId: thread.id }), { agent: { session: { id: 'source' } }, signal: new AbortController().signal });
   assert(value);
   await assert.rejects(tool.execute({ action: 'config', settings: { mode: 'follow' } }, { agent: { session: { id: 'source' } }, signal: new AbortController().signal }), { code: 'FORBIDDEN' });
+  await assert.rejects(tool.execute({ action:'config', ui:{ showButton:false, quickPrompts:[] } }, { agent:{ session:{ id:'source' } }, signal:new AbortController().signal }), { code:'FORBIDDEN' });
   await f.service.dispose();
 });
 

@@ -1,5 +1,6 @@
 import { textOnlyMarkdown } from './client-markdown.js';
 import { BtwModelDirectory } from './client-model-directory.js';
+import { DEFAULT_UI_SETTINGS, MAX_QUICK_PROMPTS, MAX_QUICK_PROMPT_CHARS } from './preferences.js';
 
 // Keep the side conversation independent; share DSH theme tokens with the main chat.
 window.__ModuleLoader__.load({
@@ -28,7 +29,9 @@ window.__ModuleLoader__.load({
         noProviders: '没有可用提供商，请先在 DSH 模型设置中配置。',
         missingModel: '请选择提供商和模型。',
         source: '引用的回答', noSource: '请从一条已完成回答旁的 BTW 按钮打开。',
-        prompt1: '这段能不能说得更直白一点？', prompt2: '为什么选择这个方案？',
+        pluginSettings: '插件设置', showButton: '显示对话 BTW 按钮', quickPrompts: '快捷提问',
+        quickPrompt: '提问 {number}', addPrompt: '添加提问', removePrompt: '删除提问 {number}',
+        hostUpdateRequired: '请重启 DSH Host 后刷新页面，以加载新版插件设置。',
         connectionError: '连接中断，请重试。', unavailable: '当前页面无法打开右侧讨论。',
         tooLong: '问题不能超过 20,000 个字符。', noText: '请输入问题。',
       },
@@ -49,7 +52,9 @@ window.__ModuleLoader__.load({
         noProviders: 'No providers available. Configure one in DSH model settings first.',
         missingModel: 'Choose a provider and model.',
         source: 'Source answer', noSource: 'Open BTW next to a completed answer.',
-        prompt1: 'Could you explain this more plainly?', prompt2: 'Why did you choose this approach?',
+        pluginSettings: 'Plugin settings', showButton: 'Show the conversation BTW button', quickPrompts: 'Quick questions',
+        quickPrompt: 'Question {number}', addPrompt: 'Add question', removePrompt: 'Remove question {number}',
+        hostUpdateRequired: 'Restart DSH Host, then refresh the page to load the updated plugin settings.',
         connectionError: 'Connection interrupted. Please reconnect.', unavailable: 'The sidebar is unavailable on this page.',
         tooLong: 'Keep the question within 20,000 characters.', noText: 'Enter a question.',
       },
@@ -99,6 +104,7 @@ window.__ModuleLoader__.load({
       .btw-root button.btw-primary{background:var(--dsw-alias-button-info-fill);color:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:500}.btw-root button.btw-primary:hover{background:var(--dsw-alias-button-info-hover)}
       @container (width<440px){.btw-context-toggle>span{display:none}.btw-composer-trailing{gap:8px}.btw-native-model{max-width:calc(100cqw - 120px)}.btw-scroll{padding-top:16px}.btw-dock{gap:4px}}
       .btw-settings{padding:18px;overflow:auto;max-width:620px}.btw-settings h3{font-size:16px;font-weight:500;margin:0 0 12px}.btw-field{display:block;margin:16px 0;font-size:13px}.btw-field>span{display:block;margin-bottom:7px}.btw-field select,.btw-field input{display:block;width:100%;min-height:36px;background:var(--dsw-specific-input-major);border:1px solid var(--btw-border);border-radius:var(--dsw-radius-sm,6px);padding:7px 9px}.btw-settings p{font-size:12px;color:var(--btw-muted);line-height:20px}.btw-setting-actions{display:flex;align-items:center;gap:10px}.btw-saved{font-size:12px;color:var(--dsw-alias-state-success-primary)}
+      .btw-toggle{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:16px 0;font-size:13px;cursor:pointer}.btw-toggle input{appearance:none;position:relative;display:block;width:34px;height:20px;flex:none;margin:0;border:1px solid var(--btw-border);border-radius:999px;background:var(--dsw-alias-label-caption);cursor:pointer}.btw-toggle input:checked{background:var(--btw-accent);border-color:var(--btw-accent)}.btw-toggle input::after{content:'';display:block;position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff}.btw-toggle input:checked::after{transform:translateX(14px)}.btw-toggle input:disabled{opacity:.4;cursor:default}.btw-prompt-fields{border:0;padding:0;margin:20px 0}.btw-prompt-fields legend{font-size:13px;margin-bottom:8px}.btw-prompt-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}.btw-prompt-row .btw-field{margin:0;flex:1;min-width:0}.btw-prompt-row>button{flex:none}
       @media(prefers-reduced-motion:no-preference){.btw-pulse{animation:btw-pulse 1.5s ease-in-out infinite}@keyframes btw-pulse{50%{opacity:.45}}}
     `;
     function Icon({ size = 16 }) {
@@ -117,11 +123,34 @@ window.__ModuleLoader__.load({
           return translate;
         }
         const focusTargets = new Map();
+        let uiSettings = DEFAULT_UI_SETTINGS;
+        let uiLoaded = false;
+        let uiRevision = 0;
+        let uiLoad;
+        const uiListeners = new Set();
+        const subscribeUi = listener => { uiListeners.add(listener); return () => uiListeners.delete(listener); };
+        function publishUi(value) {
+          uiSettings = value || DEFAULT_UI_SETTINGS;
+          uiLoaded = true;
+          uiRevision++;
+          uiListeners.forEach(listener => listener());
+        }
+        function loadUi() {
+          return uiLoad ||= rpc('config').catch(() => { uiLoad = null; if (!uiLoaded && !lifetime.signal.aborted) publishUi(DEFAULT_UI_SETTINGS); });
+        }
+        function useUiSettings() {
+          useSyncExternalStore(subscribeUi, () => uiRevision, () => uiRevision);
+          useEffect(() => { void loadUi(); }, []);
+          return uiSettings;
+        }
         const lifetime = new AbortController();
         ctx.effect(() => () => lifetime.abort());
+        ctx.on?.('connection/reset', () => { uiLoad = null; void loadUi(); });
         async function rpc(action, data = {}, signal) {
+          const revision = uiRevision;
           const result = await ctx.connection.rpc.call('/btw-rpc', 'dsh-btw/dispatch', { action, ...data }, signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal);
           if (!result.ok) throw Object.assign(new Error(result.error?.message || 'BTW request failed'), { code:result.error?.code });
+          if (action === 'config' && !data.threadId && !lifetime.signal.aborted && !signal?.aborted && (data.ui || revision === uiRevision)) publishUi(result.value.ui);
           return result.value;
         }
         const address = (sessionId, messageId) => `dsh-resource://btw/${encodeURIComponent(sessionId)}/${encodeURIComponent(messageId)}`;
@@ -289,6 +318,8 @@ window.__ModuleLoader__.load({
           const running = thread?.status === 'running';
           const target = threadId ? { sourceSessionId, threadId } : {};
           const [form, setForm] = useState(null);
+          const [uiForm, setUiForm] = useState(DEFAULT_UI_SETTINGS);
+          const [supportsUiSettings, setSupportsUiSettings] = useState(false);
           const [providers, setProviders] = useState([]);
           const [models, setModels] = useState([]);
           const [error, setError] = useState('');
@@ -296,7 +327,13 @@ window.__ModuleLoader__.load({
           const [saved, setSaved] = useState(false);
           useEffect(() => {
             const ac = new AbortController();
-            rpc('config', target, ac.signal).then(value => { setForm(value.settings); setProviders(value.providers || []); }).catch(e => { if (!ac.signal.aborted) setError(e.message); });
+            rpc('config', target, ac.signal).then(value => {
+              if (ac.signal.aborted) return;
+              setForm(value.settings); setUiForm(value.ui || DEFAULT_UI_SETTINGS); setProviders(value.providers || []);
+              const supported = !!value.ui;
+              setSupportsUiSettings(supported);
+              if (!threadId && !supported) setError(t('hostUpdateRequired'));
+            }).catch(e => { if (!ac.signal.aborted) setError(e.message); });
             return () => ac.abort();
           }, [threadId, sourceSessionId]);
           useEffect(() => {
@@ -307,23 +344,35 @@ window.__ModuleLoader__.load({
             return () => ac.abort();
           }, [form?.provider, form?.mode]);
           function update(next) { setForm(previous => ({ ...previous, ...next })); setSaved(false); setError(''); }
+          function updateUi(next) { setUiForm(previous => ({ ...previous, ...next })); setSaved(false); setError(''); }
           async function save() {
             if (!form || busy || running) return;
+            if (!threadId && !supportsUiSettings) { setError(t('hostUpdateRequired')); return; }
             if (form.mode === 'fixed' && (!form.provider || !form.model)) { setError(t('missingModel')); return; }
             setBusy(true); setSaved(false); setError('');
             try {
               const settings = form.mode === 'follow' ? { mode:'follow' } : { mode:'fixed', provider:form.provider, model:form.model };
-              const result = await rpc('config', { ...target, settings });
+              const ui = { ...uiForm, quickPrompts:uiForm.quickPrompts.map(prompt => prompt.trim()).filter(Boolean) };
+              const result = await rpc('config', { ...target, settings, ...(!threadId ? { ui } : {}) });
               setForm(result.settings);
+              if (!threadId) setUiForm(result.ui);
               if (result.thread) onSaved?.(result.thread);
               setSaved(true);
             } catch (e) { setError(e.message); } finally { setBusy(false); }
           }
-          return h('section', { className:'btw-root btw-settings', 'aria-label':t('settings') }, h('style', null, css),
-            h('h3', null, t('settings')), !threadId && h('p', null, t('modelHint')),
+          return h('section', { className:'btw-root btw-settings', 'aria-label':t(threadId ? 'settings' : 'pluginSettings') }, h('style', null, css),
+            h('h3', null, t(threadId ? 'settings' : 'pluginSettings')),
             running && h('p', { role:'status' }, t('modelBusy')),
             error && h('div', { className:'btw-error', role:'alert' }, error),
             !form ? !error && h('p', null, t('loading')) : h(React.Fragment, null,
+              !threadId && h(React.Fragment, null,
+                h('label', { className:'btw-toggle' }, h('span', null, t('showButton')), h('input', { type:'checkbox', role:'switch', checked:uiForm.showButton, disabled:busy, onChange:e => updateUi({ showButton:e.target.checked }) })),
+                h('fieldset', { className:'btw-prompt-fields', disabled:busy }, h('legend', null, t('quickPrompts')),
+                  uiForm.quickPrompts.map((prompt, index) => h('div', { className:'btw-prompt-row', key:index },
+                    h('label', { className:'btw-field' }, h('span', { className:'btw-sr-only' }, t('quickPrompt', { number:index + 1 })), h('input', { type:'text', value:prompt, maxLength:MAX_QUICK_PROMPT_CHARS, onChange:e => updateUi({ quickPrompts:uiForm.quickPrompts.map((value, i) => i === index ? e.target.value : value) }) })),
+                    h('button', { 'data-btw-control':true, type:'button', 'aria-label':t('removePrompt', { number:index + 1 }), onClick:() => updateUi({ quickPrompts:uiForm.quickPrompts.filter((_, i) => i !== index) }) }, '×'))),
+                  h('button', { 'data-btw-control':true, type:'button', disabled:uiForm.quickPrompts.length >= MAX_QUICK_PROMPTS, onClick:() => updateUi({ quickPrompts:[...uiForm.quickPrompts, ''] }) }, t('addPrompt'))),
+                h('h3', null, t('settings')), h('p', null, t('modelHint'))),
               h('label', { className:'btw-field' }, h('span', null, t(threadId ? 'threadModel' : 'modelMode')), h('select', { disabled:busy || running, value:form.mode, onChange:e => update({ mode:e.target.value }) }, h('option', { value:'follow' }, t('follow')), h('option', { value:'fixed' }, t('fixed')))),
               form.mode === 'fixed' && h(React.Fragment, null,
                 providers.length === 0 && h('p', null, t('noProviders')),
@@ -333,6 +382,7 @@ window.__ModuleLoader__.load({
         }
         function Action({ sessionId, messageId }) {
           const t = useT();
+          const ui = useUiSettings();
           const [error, setError] = useState('');
           function open() {
             try {
@@ -343,12 +393,14 @@ window.__ModuleLoader__.load({
               setError('');
             } catch (e) { setError(e.message); }
           }
+          if (!uiLoaded || !ui.showButton) return null;
           return h('span', { className:'btw-root btw-action' }, h('style', null, css),
             h('button', { 'data-btw-control':true, type:'button', className:'btw-icon', title:t('ask'), 'aria-label':t('ask'), onClick:open }, h(Icon, null)),
             error && h('span', { className:'btw-action-error', role:'alert' }, error));
         }
         function Panel(props) {
           const t = useT();
+          const ui = useUiSettings();
           const info = props.useTabInfo();
           const source = parseAddress(info.tab.navigation.address);
           const sourceSessionId = source?.sourceSessionId;
@@ -471,7 +523,7 @@ window.__ModuleLoader__.load({
               h('div', { className:'btw-column' },
               !thread && !error && h('p', { className:'btw-note', role:'status' }, t('loading')),
               thread && thread.messages.length === 0 && !running && h('div', { className:'btw-empty' }, h(Icon, { size:28 }), h('h3', null, t('empty')),
-                h('div', { className:'btw-suggestions' }, ['prompt1', 'prompt2'].map(key => h('button', { 'data-btw-control':true, type:'button', key, onClick:() => { changeDraft(t(key)); composer.current?.focus(); } }, t(key))))),
+                h('div', { className:'btw-suggestions' }, ui.quickPrompts.map((prompt, index) => h('button', { 'data-btw-control':true, type:'button', key:index, onClick:() => { changeDraft(prompt); composer.current?.focus(); } }, prompt)))),
               thread?.messages.map(message => h('article', { key:message.id, className:'btw-message', 'data-role':message.role },
                 h('span', { className:'btw-sr-only' }, t(message.role === 'user' ? 'you' : 'assistant')),
                 message.role === 'user' ? h('div', { className:'btw-user' }, message.text) : h(Markdown, { text:message.text }),

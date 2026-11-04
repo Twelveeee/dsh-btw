@@ -83,7 +83,7 @@ test('scoped Connection mounts authenticated BTW HTTP and cleans routes/storage 
     assert.equal(result.status, 200);
     assert.deepEqual(JSON.parse(result.text), {
       type: 'server-response', rpcId: 'btw-scope-test',
-      result: { ok: true, value: { settings: { mode: 'follow' }, providers: [] } },
+      result: { ok: true, value: { settings: { mode: 'follow' }, ui: { showButton:true, quickPrompts:['这段能不能说得更直白一点？', '说人话'] }, providers: [] } },
     });
     await fiber.restart();
     assert.equal(opened, 2);

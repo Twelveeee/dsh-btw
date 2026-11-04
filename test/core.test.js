@@ -52,6 +52,17 @@ test('global settings operations omit sourceSessionId but validate it when suppl
   for (const action of ['open', 'get', 'send', 'stop', 'watch']) assert.throws(() => validateRequest({ action }), { code: 'INVALID_REQUEST' });
 });
 
+test('UI settings validate the switch and editable quick question list', () => {
+  const ui = { showButton:false, quickPrompts:[' 说人话 ', '给个例子'] };
+  assert.deepEqual(validateRequest({ action:'config', ui }).ui, { showButton:false, quickPrompts:['说人话', '给个例子'] });
+  assert.deepEqual(validateRequest({ action:'config', ui:{ showButton:true, quickPrompts:[] } }).ui.quickPrompts, []);
+  for (const invalid of [null, {}, { ...ui, showButton:'false' }, { ...ui, quickPrompts:'question' },
+    { ...ui, quickPrompts:[' '] }, { ...ui, quickPrompts:[42] }, { ...ui, quickPrompts:['x'.repeat(20001)] },
+    { ...ui, quickPrompts:Array(21).fill('q') }, { ...ui, extra:true },
+  ]) assert.throws(() => validateRequest({ action:'config', ui:invalid }), { code:'INVALID_REQUEST' });
+  assert.throws(() => validateRequest({ action:'config', threadId:'t', sourceSessionId:'s', ui }), { code:'INVALID_REQUEST' });
+});
+
 test('stable identities, normalized model directory, and independent lock keys', async () => {
   assert.equal(threadKey('s', 'm'), threadKey('s', 'm')); assert.notEqual(threadKey('s', 'm'), threadKey('s2', 'm'));
   assert.notEqual(questionId('a'), questionId('b'));
